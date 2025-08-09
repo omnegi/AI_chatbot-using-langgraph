@@ -12,7 +12,7 @@ class ChatState(TypedDict):
 
 llm = ChatGoogleGenerativeAI(
     model="gemini-2.5-flash",
-    google_api_key='AIzaSyDUadmyLHdvYtlDE3f0kug7V-gRqs0x7gc'
+    google_api_key='your-api-key'
 )
 
 def chat_node(state:ChatState):
