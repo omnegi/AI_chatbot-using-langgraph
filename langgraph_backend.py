@@ -23,13 +23,6 @@ llm = ChatGroq(
 
     api_key=os.getenv("GROQ_API_KEY")
 )
-llm = ChatGoogleGenerativeAI(
-    model="gemini-2.5-flash",
-    google_api_key='your_api_key'
-
-)
-
-# ---------------- TOOLS ---------------- #
 
 search_tool = DuckDuckGoSearchRun(region="us-en")
 
