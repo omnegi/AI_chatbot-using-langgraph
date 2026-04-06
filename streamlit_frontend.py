@@ -1,6 +1,7 @@
 import uuid
-
+import json
 import streamlit as st
+
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
 from langgraph_backend import (
@@ -10,8 +11,8 @@ from langgraph_backend import (
     thread_document_metadata,
 )
 
+# ================= Utilities =================
 
-# =========================== Utilities ===========================
 def generate_thread_id():
     return uuid.uuid4()
 
@@ -29,11 +30,14 @@ def add_thread(thread_id):
 
 
 def load_conversation(thread_id):
-    state = chatbot.get_state(config={"configurable": {"thread_id": thread_id}})
+    state = chatbot.get_state(
+        config={"configurable": {"thread_id": thread_id}}
+    )
     return state.values.get("messages", [])
 
 
-# ======================= Session Initialization ===================
+# ================= Session =================
+
 if "message_history" not in st.session_state:
     st.session_state["message_history"] = []
 
@@ -51,121 +55,357 @@ add_thread(st.session_state["thread_id"])
 thread_key = str(st.session_state["thread_id"])
 thread_docs = st.session_state["ingested_docs"].setdefault(thread_key, {})
 threads = st.session_state["chat_threads"][::-1]
+
 selected_thread = None
 
-# ============================ Sidebar ============================
+
+# ================= Sidebar =================
+
 st.sidebar.title("LangGraph PDF Chatbot")
-st.sidebar.markdown(f"**Thread ID:** `{thread_key}`")
+
+st.sidebar.markdown(f"Thread ID: `{thread_key}`")
 
 if st.sidebar.button("New Chat", use_container_width=True):
     reset_chat()
     st.rerun()
 
-if thread_docs:
-    latest_doc = list(thread_docs.values())[-1]
-    st.sidebar.success(
-        f"Using `{latest_doc.get('filename')}` "
-        f"({latest_doc.get('chunks')} chunks from {latest_doc.get('documents')} pages)"
-    )
-else:
-    st.sidebar.info("No PDF indexed yet.")
 
-uploaded_pdf = st.sidebar.file_uploader("Upload a PDF for this chat", type=["pdf"])
+if thread_docs:
+
+    latest_doc = list(thread_docs.values())[-1]
+
+    st.sidebar.success(
+        f"{latest_doc.get('filename')}\n"
+        f"pages: {latest_doc.get('documents')} | "
+        f"chunks: {latest_doc.get('chunks')}"
+    )
+
+else:
+    st.sidebar.info("No PDF indexed")
+
+
+uploaded_pdf = st.sidebar.file_uploader(
+    "Upload PDF",
+    type=["pdf"]
+)
+
 if uploaded_pdf:
+
     if uploaded_pdf.name in thread_docs:
-        st.sidebar.info(f"`{uploaded_pdf.name}` already processed for this chat.")
+
+        st.sidebar.info("PDF already processed")
+
     else:
-        with st.sidebar.status("Indexing PDF…", expanded=True) as status_box:
+
+        with st.sidebar.status("Indexing PDF..."):
+
             summary = ingest_pdf(
                 uploaded_pdf.getvalue(),
                 thread_id=thread_key,
                 filename=uploaded_pdf.name,
             )
+
             thread_docs[uploaded_pdf.name] = summary
-            status_box.update(label="✅ PDF indexed", state="complete", expanded=False)
 
-st.sidebar.subheader("Past conversations")
-if not threads:
-    st.sidebar.write("No past conversations yet.")
-else:
-    for thread_id in threads:
-        if st.sidebar.button(str(thread_id), key=f"side-thread-{thread_id}"):
-            selected_thread = thread_id
+            st.sidebar.success("PDF indexed")
 
-# ============================ Main Layout ========================
+
+st.sidebar.subheader("Past chats")
+
+for thread_id in threads:
+
+    if st.sidebar.button(
+        str(thread_id),
+        key=f"thread-{thread_id}"
+    ):
+
+        selected_thread = thread_id
+
+
+# ================= Main =================
+
 st.title("Multi Utility Chatbot")
 
-# Chat area
-for message in st.session_state["message_history"]:
-    with st.chat_message(message["role"]):
-        st.text(message["content"])
 
-user_input = st.chat_input("Ask about your document or use tools")
+# ================= Chat History =================
+
+for message in st.session_state["message_history"]:
+
+    with st.chat_message(message["role"]):
+
+        st.markdown(message["content"])
+
+
+        # show stored youtube videos again
+        if "videos" in message and message["videos"]:
+
+            st.markdown("### Videos")
+
+            for video in message["videos"]:
+
+                col1, col2 = st.columns([1,3])
+
+                with col1:
+                    st.image(video["thumbnail"], width=150)
+
+                with col2:
+
+                    st.markdown(
+                        f"#### [{video['title']}]({video['url']})"
+                    )
+
+                    st.write("Channel:", video["channel"])
+
+                    st.write("Date:", video["published_at"])
+
+                    st.write(video["description"])
+
+                st.divider()
+
+
+# ================= Input =================
+
+user_input = st.chat_input(
+    "Ask something or search videos"
+)
+
 
 if user_input:
-    st.session_state["message_history"].append({"role": "user", "content": user_input})
-    with st.chat_message("user"):
-        st.text(user_input)
 
-    CONFIG = {
-        "configurable": {"thread_id": thread_key},
-        "metadata": {"thread_id": thread_key},
-        "run_name": "chat_turn",
-    }
-
-    with st.chat_message("assistant"):
-        status_holder = {"box": None}
-
-        def ai_only_stream():
-            for message_chunk, _ in chatbot.stream(
-                {"messages": [HumanMessage(content=user_input)]},
-                config=CONFIG,
-                stream_mode="messages",
-            ):
-                if isinstance(message_chunk, ToolMessage):
-                    tool_name = getattr(message_chunk, "name", "tool")
-                    if status_holder["box"] is None:
-                        status_holder["box"] = st.status(
-                            f"🔧 Using `{tool_name}` …", expanded=True
-                        )
-                    else:
-                        status_holder["box"].update(
-                            label=f"🔧 Using `{tool_name}` …",
-                            state="running",
-                            expanded=True,
-                        )
-
-                if isinstance(message_chunk, AIMessage):
-                    yield message_chunk.content
-
-        ai_message = st.write_stream(ai_only_stream())
-
-        if status_holder["box"] is not None:
-            status_holder["box"].update(
-                label="✅ Tool finished", state="complete", expanded=False
-            )
-
+    # save user message
     st.session_state["message_history"].append(
-        {"role": "assistant", "content": ai_message}
+        {
+            "role": "user",
+            "content": user_input
+        }
     )
 
-    doc_meta = thread_document_metadata(thread_key)
+
+    with st.chat_message("user"):
+        st.markdown(user_input)
+
+
+    CONFIG = {
+        "configurable": {
+            "thread_id": thread_key
+        }
+    }
+
+
+    # ================= Assistant =================
+
+    with st.chat_message("assistant"):
+
+        status_box = None
+
+        final_text = ""
+
+        youtube_videos = None
+
+
+        for message_chunk, _ in chatbot.stream(
+
+            {
+                "messages": [
+                    HumanMessage(content=user_input)
+                ]
+            },
+
+            config=CONFIG,
+
+            stream_mode="messages",
+
+        ):
+
+
+            # tool call indicator
+            if isinstance(message_chunk, ToolMessage):
+
+                tool_name = getattr(
+                    message_chunk,
+                    "name",
+                    "tool"
+                )
+
+
+                if status_box is None:
+
+                    status_box = st.status(
+                        f"Using tool: {tool_name}",
+                        expanded=True,
+                    )
+
+
+                # read tool output
+                try:
+
+                    if isinstance(
+                        message_chunk.content,
+                        str
+                    ):
+
+                        data = json.loads(
+                            message_chunk.content
+                        )
+
+                    else:
+
+                        data = message_chunk.content
+
+
+                    if (
+                        isinstance(data, dict)
+                        and "videos" in data
+                    ):
+
+                        youtube_videos = data["videos"]
+
+
+                except:
+                    pass
+
+
+            # AI response text
+            if isinstance(
+                message_chunk,
+                AIMessage
+            ):
+
+                final_text += message_chunk.content
+
+
+        # tool finished
+        if status_box:
+
+            status_box.update(
+                label="Tool finished",
+                state="complete",
+                expanded=False,
+            )
+
+
+        # show text response
+        st.markdown(final_text)
+
+
+        # show videos
+        if youtube_videos:
+
+            st.markdown("### Videos")
+
+            for video in youtube_videos:
+
+                col1, col2 = st.columns([1,3])
+
+
+                with col1:
+
+                    st.image(
+                        video["thumbnail"],
+                        width=150
+                    )
+
+
+                with col2:
+
+                    st.markdown(
+                        f"#### [{video['title']}]({video['url']})"
+                    )
+
+                    st.write(
+                        "Channel:",
+                        video["channel"]
+                    )
+
+                    st.write(
+                        "Date:",
+                        video["published_at"]
+                    )
+
+                    st.write(
+                        video["description"]
+                    )
+
+
+                st.divider()
+
+
+    # store assistant message
+    st.session_state["message_history"].append(
+
+        {
+            "role": "assistant",
+
+            "content": final_text,
+
+            "videos": youtube_videos,
+        }
+
+    )
+
+
+    # pdf metadata
+    doc_meta = thread_document_metadata(
+        thread_key
+    )
+
+
     if doc_meta:
+
         st.caption(
-            f"Document indexed: {doc_meta.get('filename')} "
-            f"(chunks: {doc_meta.get('chunks')}, pages: {doc_meta.get('documents')})"
+
+            f"PDF: {doc_meta.get('filename')} | "
+
+            f"pages: {doc_meta.get('documents')} | "
+
+            f"chunks: {doc_meta.get('chunks')}"
+
         )
+
 
 st.divider()
 
+
+# ================= Load old thread =================
+
 if selected_thread:
+
     st.session_state["thread_id"] = selected_thread
-    messages = load_conversation(selected_thread)
+
+    messages = load_conversation(
+        selected_thread
+    )
+
 
     temp_messages = []
+
+
     for msg in messages:
-        role = "user" if isinstance(msg, HumanMessage) else "assistant"
-        temp_messages.append({"role": role, "content": msg.content})
+
+        role = (
+            "user"
+            if isinstance(msg, HumanMessage)
+            else "assistant"
+        )
+
+
+        temp_messages.append(
+
+            {
+                "role": role,
+
+                "content": msg.content
+            }
+
+        )
+
+
     st.session_state["message_history"] = temp_messages
-    st.session_state["ingested_docs"].setdefault(str(selected_thread), {})
+
+    st.session_state["ingested_docs"].setdefault(
+        str(selected_thread),
+        {}
+    )
+
+
     st.rerun()

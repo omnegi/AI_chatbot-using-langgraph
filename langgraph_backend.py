@@ -99,6 +99,67 @@ def ingest_pdf(file_bytes: bytes, thread_id: str, filename: Optional[str] = None
 # -------------------
 search_tool = DuckDuckGoSearchRun(name="search",region="us-en")
 
+@tool
+def youtube_search(query: str, max_results: int = 5) -> dict:
+    """
+    Search YouTube for videos by topic or keyword.
+    Returns video titles, URLs, channel names, and descriptions.
+    example:
+    query = "LangGraph tutorial"
+    max_results = 5
+    """
+    api_key = os.getenv("YOUTUBE_API_KEY")
+ 
+    if not api_key:
+        return {"error": "YOUTUBE_API_KEY not set in .env file."}
+ 
+    try:
+        url = "https://www.googleapis.com/youtube/v3/search"
+ 
+        params = {
+            "part": "snippet",
+            "q": query,
+            "type": "video",
+            "maxResults": max_results,
+            "key": api_key,
+            "relevanceLanguage": "en",
+            "safeSearch": "moderate",
+        }
+ 
+        response = requests.get(url, params=params, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+ 
+        if "items" not in data or not data["items"]:
+            return {"results": [], "message": f"No videos found for '{query}'"}
+ 
+        videos = []
+        for item in data["items"]:
+            video_id = item["id"]["videoId"]
+            snippet = item["snippet"]
+            videos.append({
+                "title": snippet["title"],
+                "channel": snippet["channelTitle"],
+                "description": snippet["description"][:200] + "..." if len(snippet["description"]) > 200 else snippet["description"],
+                "url": f"https://www.youtube.com/watch?v={video_id}",
+                "thumbnail": snippet["thumbnails"]["medium"]["url"],
+                "published_at": snippet["publishedAt"][:10],  # YYYY-MM-DD
+            })
+ 
+        return {
+            "query": query,
+            "total_results": len(videos),
+            "videos": videos
+        }
+ 
+    except requests.exceptions.Timeout:
+        return {"error": "YouTube API request timed out. Try again."}
+    except requests.exceptions.HTTPError as e:
+        if e.response.status_code == 403:
+            return {"error": "YouTube API quota exceeded or invalid API key."}
+        return {"error": f"YouTube API HTTP error: {str(e)}"}
+    except Exception as e:
+        return {"error": f"YouTube search failed: {str(e)}"}
 
 @tool
 def calculator(first_num: float, second_num: float, operation: str) -> dict:
@@ -169,7 +230,7 @@ def rag_tool(query: str, thread_id: Optional[str] = None) -> dict:
     }
 
 
-tools = [search_tool, get_stock_price, calculator, rag_tool]
+tools = [search_tool, get_stock_price, calculator, youtube_search,rag_tool]
 llm_with_tools = llm.bind_tools(tools)
 
 # -------------------
@@ -190,11 +251,51 @@ def chat_node(state: ChatState, config=None):
 
     system_message = SystemMessage(
         content=(
-            "You are a helpful assistant. For questions about the uploaded PDF, call "
-            "the `rag_tool` and include the thread_id "
-            f"`{thread_id}`. You can also use the web search, stock price, and "
-            "calculator tools when helpful. If no document is available, ask the user "
-            "to upload a PDF."
+           f"""
+You are an intelligent AI assistant similar to ChatGPT, Gemini, and Claude.
+
+RESPONSE STYLE:
+- Give clear, helpful, and moderately detailed answers
+- Write in a natural conversational tone
+- Avoid very short answers (1–2 lines)
+- Avoid overly long essays unless user asks
+- Use paragraphs or bullet points for readability
+- When helpful, include examples
+- Make answers easy to understand
+- Keep responses informative but concise
+
+TOOLS AVAILABLE:
+
+1. rag_tool
+Use when the user asks about uploaded PDF.
+Always include:
+thread_id = "{thread_id}"
+
+2. youtube_search
+Use when user asks for:
+- youtube videos
+- tutorials
+- course videos
+- watch videos
+argument:
+query = topic
+
+3. search
+Use for latest or factual information from internet.
+
+4. calculator
+Use for mathematical calculations.
+
+5. get_stock_price
+Use when user asks about stock prices.
+
+GENERAL BEHAVIOR:
+- Answer normally if no tool needed
+- Use tools only when helpful
+- Summarize tool results clearly
+- Maintain conversational tone
+- Do not mention tools in final answer
+"""
         )
     )
 
