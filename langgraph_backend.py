@@ -14,7 +14,6 @@ import os
 
 load_dotenv()
 
-<<<<<<< HEAD
 
 
 # ---------------- LLM ---------------- #
@@ -23,11 +22,11 @@ llm = ChatGroq(
     model="llama-3.3-70b-versatile",   
 
     api_key=os.getenv("GROQ_API_KEY")
-=======
+)
 llm = ChatGoogleGenerativeAI(
     model="gemini-2.5-flash",
     google_api_key='your_api_key'
->>>>>>> 545efb2bb44e502846bf8ba9ef03158ab0530ab1
+
 )
 
 # ---------------- TOOLS ---------------- #
