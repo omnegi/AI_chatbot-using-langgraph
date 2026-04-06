@@ -1,175 +1,171 @@
-import streamlit as st
 import uuid
 
-from langchain_core.messages import HumanMessage
+import streamlit as st
+from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
-from langgraph_backend import chatbot, reterieve_all_threads
+from langgraph_backend import (
+    chatbot,
+    ingest_pdf,
+    retrieve_all_threads,
+    thread_document_metadata,
+)
 
 
-# generate chat id
+# =========================== Utilities ===========================
 def generate_thread_id():
-    return str(uuid.uuid4())
+    return uuid.uuid4()
 
 
-# reset conversation
 def reset_chat():
-
     thread_id = generate_thread_id()
-
     st.session_state["thread_id"] = thread_id
-
     add_thread(thread_id)
-
     st.session_state["message_history"] = []
 
 
-# store thread
 def add_thread(thread_id):
-
     if thread_id not in st.session_state["chat_threads"]:
-
         st.session_state["chat_threads"].append(thread_id)
 
 
-# load old messages
 def load_conversation(thread_id):
-
-    state = chatbot.get_state(
-
-        config={"configurable": {"thread_id": thread_id}}
-
-    )
-
-    # FIX: messages instead of message
-    if state and "messages" in state.values:
-
-        return state.values["messages"]
-
-    return []
+    state = chatbot.get_state(config={"configurable": {"thread_id": thread_id}})
+    return state.values.get("messages", [])
 
 
-# session state
+# ======================= Session Initialization ===================
 if "message_history" not in st.session_state:
-
     st.session_state["message_history"] = []
 
 if "thread_id" not in st.session_state:
-
     st.session_state["thread_id"] = generate_thread_id()
 
 if "chat_threads" not in st.session_state:
+    st.session_state["chat_threads"] = retrieve_all_threads()
 
-    st.session_state["chat_threads"] = reterieve_all_threads()
-
+if "ingested_docs" not in st.session_state:
+    st.session_state["ingested_docs"] = {}
 
 add_thread(st.session_state["thread_id"])
 
+thread_key = str(st.session_state["thread_id"])
+thread_docs = st.session_state["ingested_docs"].setdefault(thread_key, {})
+threads = st.session_state["chat_threads"][::-1]
+selected_thread = None
 
-# sidebar
-st.sidebar.title("AI Agent")
+# ============================ Sidebar ============================
+st.sidebar.title("LangGraph PDF Chatbot")
+st.sidebar.markdown(f"**Thread ID:** `{thread_key}`")
 
-if st.sidebar.button("New Chat"):
-
+if st.sidebar.button("New Chat", use_container_width=True):
     reset_chat()
+    st.rerun()
 
-
-st.sidebar.header("Conversations")
-
-
-# conversation list
-for thread_id in st.session_state["chat_threads"][::-1]:
-
-    if st.sidebar.button(thread_id):
-
-        st.session_state["thread_id"] = thread_id
-
-        messages = load_conversation(thread_id)
-
-        formatted_messages = []
-
-        for msg in messages:
-
-            role = "user" if isinstance(msg, HumanMessage) else "assistant"
-
-            formatted_messages.append(
-
-                {"role": role, "content": msg.content}
-
-            )
-
-        st.session_state["message_history"] = formatted_messages
-
-
-# show chat history
-for message in st.session_state["message_history"]:
-
-    with st.chat_message(message["role"]):
-
-        st.write(message["content"])
-
-
-# user input
-user_input = st.chat_input("Ask anything...")
-
-
-if user_input and user_input.strip() != "":
-
-    st.session_state["message_history"].append(
-
-        {"role": "user", "content": user_input}
-
+if thread_docs:
+    latest_doc = list(thread_docs.values())[-1]
+    st.sidebar.success(
+        f"Using `{latest_doc.get('filename')}` "
+        f"({latest_doc.get('chunks')} chunks from {latest_doc.get('documents')} pages)"
     )
+else:
+    st.sidebar.info("No PDF indexed yet.")
 
+uploaded_pdf = st.sidebar.file_uploader("Upload a PDF for this chat", type=["pdf"])
+if uploaded_pdf:
+    if uploaded_pdf.name in thread_docs:
+        st.sidebar.info(f"`{uploaded_pdf.name}` already processed for this chat.")
+    else:
+        with st.sidebar.status("Indexing PDF…", expanded=True) as status_box:
+            summary = ingest_pdf(
+                uploaded_pdf.getvalue(),
+                thread_id=thread_key,
+                filename=uploaded_pdf.name,
+            )
+            thread_docs[uploaded_pdf.name] = summary
+            status_box.update(label="✅ PDF indexed", state="complete", expanded=False)
+
+st.sidebar.subheader("Past conversations")
+if not threads:
+    st.sidebar.write("No past conversations yet.")
+else:
+    for thread_id in threads:
+        if st.sidebar.button(str(thread_id), key=f"side-thread-{thread_id}"):
+            selected_thread = thread_id
+
+# ============================ Main Layout ========================
+st.title("Multi Utility Chatbot")
+
+# Chat area
+for message in st.session_state["message_history"]:
+    with st.chat_message(message["role"]):
+        st.text(message["content"])
+
+user_input = st.chat_input("Ask about your document or use tools")
+
+if user_input:
+    st.session_state["message_history"].append({"role": "user", "content": user_input})
     with st.chat_message("user"):
-
-        st.write(user_input)
-
+        st.text(user_input)
 
     CONFIG = {
-
-        "configurable": {
-
-            "thread_id": st.session_state["thread_id"]
-
-        }
-
+        "configurable": {"thread_id": thread_key},
+        "metadata": {"thread_id": thread_key},
+        "run_name": "chat_turn",
     }
 
-
     with st.chat_message("assistant"):
+        status_holder = {"box": None}
 
-        response_text = ""
-        placeholder = st.empty()
+        def ai_only_stream():
+            for message_chunk, _ in chatbot.stream(
+                {"messages": [HumanMessage(content=user_input)]},
+                config=CONFIG,
+                stream_mode="messages",
+            ):
+                if isinstance(message_chunk, ToolMessage):
+                    tool_name = getattr(message_chunk, "name", "tool")
+                    if status_holder["box"] is None:
+                        status_holder["box"] = st.status(
+                            f"🔧 Using `{tool_name}` …", expanded=True
+                        )
+                    else:
+                        status_holder["box"].update(
+                            label=f"🔧 Using `{tool_name}` …",
+                            state="running",
+                            expanded=True,
+                        )
 
+                if isinstance(message_chunk, AIMessage):
+                    yield message_chunk.content
 
-        # FIX: messages instead of message
-        for chunk, metadata in chatbot.stream(
+        ai_message = st.write_stream(ai_only_stream())
 
-            {
-
-                "messages": [
-
-                    HumanMessage(content=user_input)
-
-                ]
-
-            },
-
-            config=CONFIG,
-
-            stream_mode="messages"
-
-        ):
-
-            if chunk.content:
-
-                response_text += chunk.content
-
-                placeholder.markdown(response_text)
-
+        if status_holder["box"] is not None:
+            status_holder["box"].update(
+                label="✅ Tool finished", state="complete", expanded=False
+            )
 
     st.session_state["message_history"].append(
-
-        {"role": "assistant", "content": response_text}
-
+        {"role": "assistant", "content": ai_message}
     )
+
+    doc_meta = thread_document_metadata(thread_key)
+    if doc_meta:
+        st.caption(
+            f"Document indexed: {doc_meta.get('filename')} "
+            f"(chunks: {doc_meta.get('chunks')}, pages: {doc_meta.get('documents')})"
+        )
+
+st.divider()
+
+if selected_thread:
+    st.session_state["thread_id"] = selected_thread
+    messages = load_conversation(selected_thread)
+
+    temp_messages = []
+    for msg in messages:
+        role = "user" if isinstance(msg, HumanMessage) else "assistant"
+        temp_messages.append({"role": role, "content": msg.content})
+    st.session_state["message_history"] = temp_messages
+    st.session_state["ingested_docs"].setdefault(str(selected_thread), {})
+    st.rerun()
