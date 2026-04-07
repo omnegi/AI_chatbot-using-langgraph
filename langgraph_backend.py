@@ -206,6 +206,68 @@ def get_stock_price(symbol: str) -> dict:
 
 
 @tool
+def weather_agent(city: str) -> dict:
+    """
+    Get hourly weather forecast for next 24 hours.
+    """
+
+    api_key = os.getenv("OPENWEATHER_API_KEY")
+
+    # Step 1: get coordinates of city
+    geo_url = "http://api.openweathermap.org/geo/1.0/direct"
+
+    geo_params = {
+        "q": city,
+        "limit": 1,
+        "appid": api_key
+    }
+
+    geo_res = requests.get(geo_url, params=geo_params).json()
+
+    if not geo_res:
+        return {"error": "City not found"}
+
+    lat = geo_res[0]["lat"]
+    lon = geo_res[0]["lon"]
+
+    # Step 2: hourly forecast
+    forecast_url = "https://api.openweathermap.org/data/2.5/forecast"
+
+    forecast_params = {
+        "lat": lat,
+        "lon": lon,
+        "appid": api_key,
+        "units": "metric"
+    }
+
+    forecast_res = requests.get(
+        forecast_url,
+        params=forecast_params
+    ).json()
+
+    hourly_data = []
+
+    for item in forecast_res["list"][:8]:
+
+        hourly_data.append({
+
+            "time": item["dt_txt"],
+
+            "temp": item["main"]["temp"],
+
+            "weather": item["weather"][0]["description"]
+
+        })
+
+    return {
+
+        "city": city,
+
+        "hourly_forecast": hourly_data
+
+    }
+
+@tool
 def rag_tool(query: str, thread_id: Optional[str] = None) -> dict:
     """
     Retrieve relevant information from the uploaded PDF for this chat thread.
@@ -230,7 +292,7 @@ def rag_tool(query: str, thread_id: Optional[str] = None) -> dict:
     }
 
 
-tools = [search_tool, get_stock_price, calculator, youtube_search,rag_tool]
+tools = [search_tool, get_stock_price, calculator, weather_agent,youtube_search,rag_tool]
 llm_with_tools = llm.bind_tools(tools)
 
 # -------------------
@@ -289,12 +351,27 @@ Use for mathematical calculations.
 5. get_stock_price
 Use when user asks about stock prices.
 
+6. weather_agent
+Use when user asks:
+- weather
+- temperature
+- rain
+- climate
+- forecast
+- humidity
+argument:
+city = city name
+
+Always call the weather tool when weather info is requested.
+Do not guess weather information.
+
 GENERAL BEHAVIOR:
 - Answer normally if no tool needed
 - Use tools only when helpful
 - Summarize tool results clearly
 - Maintain conversational tone
 - Do not mention tools in final answer
+-Do not let anybody to know what is happening behind the scenes, just give the answer to the user
 """
         )
     )
