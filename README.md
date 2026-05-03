@@ -1,17 +1,18 @@
-# 🤖 Multi-Utility AI Assistant
+# 🤖 AI Agent with RAG and Tool Calling
 
-![Python](https://img.shields.io/badge/Python-3.10+-blue?style=for-the-badge\&logo=python)
-![Streamlit](https://img.shields.io/badge/Streamlit-UI-red?style=for-the-badge\&logo=streamlit)
+![Python](https://img.shields.io/badge/Python-3.10+-blue?style=for-the-badge&logo=python)
+![Streamlit](https://img.shields.io/badge/Streamlit-UI-red?style=for-the-badge&logo=streamlit)
 ![LangChain](https://img.shields.io/badge/LangChain-AI-green?style=for-the-badge)
 ![LangGraph](https://img.shields.io/badge/LangGraph-Agent-orange?style=for-the-badge)
 ![Groq](https://img.shields.io/badge/Groq-LLM-black?style=for-the-badge)
 ![FAISS](https://img.shields.io/badge/FAISS-VectorDB-purple?style=for-the-badge)
-![SQLite](https://img.shields.io/badge/SQLite-Database-blue?style=for-the-badge\&logo=sqlite)
+![SQLite](https://img.shields.io/badge/SQLite-Database-blue?style=for-the-badge&logo=sqlite)
+![Gmail API](https://img.shields.io/badge/Gmail-Integration-red?style=for-the-badge&logo=gmail)
 ![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)
 
 ---
 
-A powerful AI assistant built using **LangGraph + Groq (LLaMA 3.3)** with multiple integrated tools like PDF analysis, YouTube search, weather forecasting, and more.
+A powerful **multi-tool AI assistant** built using **LangGraph + Groq (LLaMA 3.3)** capable of reasoning, retrieving knowledge, and interacting with real-world tools like Gmail, weather, search, and more.
 
 ---
 
@@ -19,175 +20,215 @@ A powerful AI assistant built using **LangGraph + Groq (LLaMA 3.3)** with multip
 
 ### 🧠 Core AI Capabilities
 
-* Conversational AI powered by **Groq (LLaMA 3.3)**
-* Context-aware responses using **LangGraph**
-* Multi-tool reasoning (agent-based system)
+- Conversational AI powered by **Groq (LLaMA 3.3)**
+- Context-aware responses using **LangGraph**
+- Dynamic **tool-calling agent architecture**
+- Multi-step reasoning with tool selection
 
 ---
 
 ### 📄 PDF Intelligence (RAG)
 
-* Upload and analyze PDFs
-* Semantic search using **FAISS**
-* Ask questions directly from documents
+- Upload and analyze PDFs
+- Semantic search using **FAISS vector database**
+- Ask questions directly from documents
+- Context-based intelligent answers
+
+---
+
+### 📧 Gmail AI Integration
+
+- ✉️ AI-generated email drafting
+- ✅ Approval-based email sending (safe workflow)
+- 📥 Read latest emails
+- 🔍 Search emails by keyword
 
 ---
 
 ### 🎥 YouTube Search Tool
 
-* Fetch relevant videos based on query
-* Displays:
-
-  * Thumbnail preview
-  * Title (clickable)
-  * Channel name
-  * Description
+- Fetch relevant videos based on query
+- Displays:
+  - Thumbnail preview
+  - Clickable title
+  - Channel name
+  - Description
 
 ---
 
 ### 🌤 Weather Agent
 
-* Real-time weather data using OpenWeather API
-* Displays:
+- Real-time weather using OpenWeather API
+- Shows:
+  - Temperature
+  - Weather condition
+  - Hourly forecast
 
-  * Temperature
-  * Condition
-  * Humidity
-  * Wind speed
-* 📊 Hourly forecast chart visualization
+---
+
+### 📈 Stock Price Tool
+
+- Get real-time stock data using Alpha Vantage API
 
 ---
 
 ### 🧮 Calculator Tool
 
-* Perform arithmetic operations:
-
-  * Add, Subtract, Multiply, Divide
+- Perform arithmetic operations:
+  - Add, Subtract, Multiply, Divide
 
 ---
 
 ### 🌐 Web Search
 
-* Real-time search using DuckDuckGo
+- Real-time search using DuckDuckGo
 
 ---
 
-### 💬 Chat Memory (Short-Term)
+### 💬 Chat Memory
 
-* Maintains conversation context within a session
-* Powered by **LangGraph + SQLite checkpointer**
-* Enables context-aware multi-turn conversations
+- Maintains conversation history
+- Powered by **SQLite + LangGraph checkpointer**
+- Enables context-aware multi-turn chat
 
 ---
 
 ### 💬 Chat Interface
 
-* Modern UI built with **Streamlit**
-* Glassmorphism design
-* Chat bubbles like ChatGPT
-* Tool outputs rendered as UI cards
+- Built with **Streamlit**
+- ChatGPT-like UI
+- Tool outputs displayed cleanly
+- Interactive chat experience
 
 ---
 
 ## 🏗 Tech Stack
 
 ### Frontend
-
-* Streamlit
-* Matplotlib
-* Custom CSS (Glass UI)
+- Streamlit
+- Custom UI styling
 
 ### Backend
-
-* LangGraph
-* LangChain
-* Groq API (LLaMA 3.3)
+- Python
+- LangGraph
+- LangChain
+- Groq API (LLaMA 3.3)
 
 ### Data & Storage
-
-* SQLite (chat history / short-term memory)
-* FAISS (PDF vector store)
+- SQLite (chat memory)
+- FAISS (vector database)
 
 ### APIs Used
-
-* YouTube Data API
-* OpenWeather API
-* DuckDuckGo Search
+- Gmail API
+- YouTube Data API
+- OpenWeather API
+- DuckDuckGo Search
+- Alpha Vantage API
 
 ---
 
 ## 📂 Project Structure
-
-```id="r2w4pj"
 project/
 │
-├── frontend.py
+├── streamlit_frontend.py
 ├── langgraph_backend.py
+├── gmail_tool.py
 ├── chatbot.db
-├── memory_index/
 ├── .env
+├── credentials.json
+├── token.json
 └── README.md
-```
+
 
 ---
 
 ## ⚙️ Setup Instructions
 
-### 1. Clone repo
+### 1. Clone repository
 
-```id="bqb3p1"
+
 git clone https://github.com/your-username/your-repo.git
+
 cd your-repo
-```
+
 
 ---
 
 ### 2. Install dependencies
 
-```id="tptpd3"
+
 pip install -r requirements.txt
-```
+
 
 ---
 
-### 3. Add environment variables
+### 3. Setup environment variables
 
 Create `.env` file:
 
-```id="3tj21o"
+
 GROQ_API_KEY=your_key
 YOUTUBE_API_KEY=your_key
 OPENWEATHER_API_KEY=your_key
-```
+
 
 ---
 
-### 4. Run app
+### 4. Setup Gmail API
 
-```id="pc7kjj"
-streamlit run frontend.py
-```
+- Enable Gmail API in Google Cloud Console
+- Create OAuth Client (Desktop App)
+- Download `credentials.json`
+- Add your email to **Test Users**
+
+---
+
+### 5. Run application
+
+
+streamlit run streamlit_frontend.py
+
 
 ---
 
 ## 🧪 Example Queries
 
-```id="txpdsg"
+
 weather in delhi
-hourly weather in mumbai
-python tutorials youtube
+latest news in india
+youtube python tutorial
 summarize this pdf
-what is machine learning
-```
+write email for leave
+show my latest emails
+
+
+---
+
+## 🔐 Email Safety Workflow
+
+- Draft shown before sending
+- Requires user approval
+- Prevents accidental email sending
 
 ---
 
 ## 💡 Highlights
 
-* Multi-agent AI system using LangGraph
-* Combines RAG + tools in a single assistant
-* Modern UI similar to ChatGPT
-* Real-time API integrations
+- Built **agentic AI system with tool calling**
+- Implemented **RAG pipeline with FAISS**
+- Integrated **real-world APIs (Gmail, Weather, YouTube)**
+- Designed **multi-tool intelligent assistant**
+- Created **memory-enabled conversational system**
+
+---
+
+## 🚀 Future Improvements
+
+- Long-term memory (PostgreSQL + pgvector)
+- Multi-agent system
+- Email auto-reply AI
+- Voice assistant integration
+- Deployment (Render / Vercel)
 
 ---
 
@@ -199,5 +240,4 @@ what is machine learning
 
 ## ⭐ Support
 
-## If you like this project, give it a ⭐ on GitHub!
-
+If you like this project, give it a ⭐ on GitHub!
