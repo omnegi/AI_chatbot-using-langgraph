@@ -14,6 +14,8 @@ from langchain_core.messages import BaseMessage, SystemMessage
 from langchain_core.tools import tool
 
 from langgraph.checkpoint.sqlite import SqliteSaver
+from langgraph.checkpoint.memory import MemorySaver
+
 from langgraph.graph import START, StateGraph
 from langgraph.graph.message import add_messages
 from langgraph.prebuilt import ToolNode, tools_condition
@@ -21,6 +23,12 @@ import requests
 from langchain_groq import ChatGroq
 from langchain_huggingface import HuggingFaceEmbeddings
 load_dotenv()
+from gmail_tool import (
+    gmail_draft,
+    gmail_send,
+    gmail_read_latest,
+    gmail_search
+)
 
 # -------------------
 # 1. LLM + embeddings
@@ -97,7 +105,7 @@ def ingest_pdf(file_bytes: bytes, thread_id: str, filename: Optional[str] = None
 # -------------------
 # 3. Tools
 # -------------------
-search_tool = DuckDuckGoSearchRun(name="search",region="us-en")
+search_tool = DuckDuckGoSearchRun(name="web_search",region="us-en")
 
 @tool
 def youtube_search(query: str, max_results: int = 5) -> dict:
@@ -292,7 +300,7 @@ def rag_tool(query: str, thread_id: Optional[str] = None) -> dict:
     }
 
 
-tools = [search_tool, get_stock_price, calculator, weather_agent,youtube_search,rag_tool]
+tools = [search_tool, get_stock_price, calculator, weather_agent,youtube_search,rag_tool,gmail_draft,gmail_send,gmail_read_latest,gmail_search]
 llm_with_tools = llm.bind_tools(tools)
 
 # -------------------
@@ -342,7 +350,7 @@ Use when user asks for:
 argument:
 query = topic
 
-3. search
+3. web_search
 Use for latest or factual information from internet.
 
 4. calculator
@@ -364,6 +372,55 @@ city = city name
 
 Always call the weather tool when weather info is requested.
 Do not guess weather information.
+
+ 7.EMAIL TOOLS:
+
+gmail_draft
+Use when user wants to:
+- write email
+- create email
+- draft email
+- generate email
+- compose message
+
+The AI should generate a clear email with:
+Subject
+Body
+
+Wait for user approval before sending.
+
+
+gmail_send
+Use only after user clearly approves the draft.
+
+User approval examples:
+- send this email
+- approve email
+- yes send
+- send now
+- looks good send
+
+Do NOT send email without confirmation.
+
+
+gmail_read_latest
+Use when user asks:
+- show my latest emails
+- recent emails
+- check inbox
+- unread emails
+- what emails did I receive
+
+
+gmail_search
+Use when user asks:
+- find email
+- search inbox
+- email from specific sender
+- find mail from amazon
+- search email about invoice
+
+
 
 GENERAL BEHAVIOR:
 - Answer normally if no tool needed
